@@ -75,8 +75,8 @@ const register = async (req, res, next) => {
 };
 
 const login = async (req, res, next) => {
-  const email = req.body.name;
-  const password = req.body.name;
+  const email = req.body.email;
+  const password = req.body.password;
   const inputValidation = LoginSchema.safeParse({ email, password });
   try {
     if (inputValidation.success) {
@@ -85,14 +85,14 @@ const login = async (req, res, next) => {
         const passwordCheck = await bcrypt.compare(password, user.password);
         if (passwordCheck) {
           const accessToken = jwt.sign(
-            { id: accountHolder._id, role: accountHolder.role },
+            { id: user._id, role: user.role },
             process.env.ACCESS_SECRET_CODE,
             {
               expiresIn: "15m",
             },
           );
           const refreshToken = jwt.sign(
-            { id: accountHolder._id },
+            { id: user._id },
             process.env.REFRESH_SECRET_CODE,
             {
               expiresIn: "7d",
@@ -101,6 +101,12 @@ const login = async (req, res, next) => {
           const hashrefreshToken = await bcrypt.hash(refreshToken, 10);
           user.passwordResetToken = hashrefreshToken;
           await user.save();
+          res.status(201).json({
+            success: true,
+            message: "Successfully loged in",
+            accessToken,
+            refreshToken,
+          });
         } else {
           const error = new Error("Invalid Credentials");
           error.statusCode = 401;
@@ -108,7 +114,7 @@ const login = async (req, res, next) => {
         }
       } else {
         const error = new Error("Invalid Credentials");
-        error.statusCode = 404;
+        error.statusCode = 401;
         next(error);
       }
     } else {
