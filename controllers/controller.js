@@ -2,29 +2,57 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const z = require("zod");
 
-const { User } = require("../models/user.js");
+const User = require("../models/user.js");
 
 const UserSchema = z.object({
-  username: z.string().min(5),
-  email: z.email(),
-  password: z.min(5).max(8).string(),
+  name: z.string().min(5),
+  email: z.string().email(),
+  password: z.string().min(5).max(8),
+});
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(5).max(8),
 });
 
 const register = async (req, res, next) => {
-  const username = req.body.username;
+  const name = req.body.name;
   const email = req.body.email;
   const password = req.body.password;
-  const result = UserSchema.safeParse({ username, email, password });
+  const result = UserSchema.safeParse({ name, email, password });
   try {
     if (result.success) {
-      const user = await User.findOne({ username });
+      const user = await User.findOne({ email });
       if (!user) {
         const hashedPassword = await bcrypt.hash(password, 10);
         if (hashedPassword) {
-          await User.create({ username, password: hashedPassword, email });
+          const accountHolder = await User.create({
+            name,
+            password: hashedPassword,
+            email,
+          });
+          const accessToken = jwt.sign(
+            { id: accountHolder._id, role: accountHolder.role },
+            process.env.ACCESS_SECRET_CODE,
+            {
+              expiresIn: "15m",
+            },
+          );
+          const refreshToken = jwt.sign(
+            { id: accountHolder._id },
+            process.env.REFRESH_SECRET_CODE,
+            {
+              expiresIn: "7d",
+            },
+          );
+          const hashrefreshToken = await bcrypt.hash(refreshToken, 10);
+          accountHolder.passwordResetToken = hashrefreshToken;
+          await accountHolder.save();
           res.status(201).json({
             success: true,
             message: "Successfully created user",
+            accessToken,
+            refreshToken,
           });
         } else {
           const error = new Error("Couldn't create hash and create DB");
@@ -37,18 +65,63 @@ const register = async (req, res, next) => {
         next(error);
       }
     } else {
-      const error = new Error(result.message);
+      const error = new Error(result.error);
       error.statusCode = 422;
       next(error);
     }
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error,
-    });
+    next(error);
+  }
+};
+
+const login = async (req, res, next) => {
+  const email = req.body.name;
+  const password = req.body.name;
+  const inputValidation = LoginSchema.safeParse({ email, password });
+  try {
+    if (inputValidation.success) {
+      const user = await User.findOne({ email });
+      if (user) {
+        const passwordCheck = await bcrypt.compare(password, user.password);
+        if (passwordCheck) {
+          const accessToken = jwt.sign(
+            { id: accountHolder._id, role: accountHolder.role },
+            process.env.ACCESS_SECRET_CODE,
+            {
+              expiresIn: "15m",
+            },
+          );
+          const refreshToken = jwt.sign(
+            { id: accountHolder._id },
+            process.env.REFRESH_SECRET_CODE,
+            {
+              expiresIn: "7d",
+            },
+          );
+          const hashrefreshToken = await bcrypt.hash(refreshToken, 10);
+          user.passwordResetToken = hashrefreshToken;
+          await user.save();
+        } else {
+          const error = new Error("Invalid Credentials");
+          error.statusCode = 401;
+          next(error);
+        }
+      } else {
+        const error = new Error("Invalid Credentials");
+        error.statusCode = 404;
+        next(error);
+      }
+    } else {
+      const error = new Error(inputValidation.error);
+      error.statusCode = 422;
+      next(error);
+    }
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports = {
   register,
+  login,
 };

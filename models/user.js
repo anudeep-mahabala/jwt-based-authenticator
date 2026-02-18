@@ -3,9 +3,6 @@ const { Schema } = mongoose;
 const Object = new mongoose.Types.ObjectId();
 
 const user = new Schema({
-  id: {
-    type: Object,
-  },
   name: {
     type: String,
     default: undefined,
@@ -14,31 +11,31 @@ const user = new Schema({
   email: {
     type: String,
     unique: true,
-    require: true,
+    required: true,
   },
   password: {
     type: String,
-    unique: true,
-    require: true,
+    unique: false,
+    required: true,
   },
   role: {
     type: String,
     enum: ["user", "admin"],
-    require: true,
+    required: true,
     default: "user",
   },
   passwordResetToken: {
     type: String,
     default: undefined,
-    require: false,
+    required: false,
   },
   passwordResetExpiry: {
     type: Date,
     default: undefined,
-    require: false,
+    required: false,
   },
 });
 
 const User = mongoose.model("User", user);
 
-module.exports = user;
+module.exports = User;
